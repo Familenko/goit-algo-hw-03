@@ -1,0 +1,126 @@
+Sub GetExchangeRates()
+    Dim http As Object
+    Dim html As Object
+    Dim startDate As Date
+    Dim endDate As Date
+    Dim currentDate As Date
+    Dim url As String
+    Dim currencyRow As String
+    Dim exchangeRate As String
+    Dim found As Boolean
+    Dim lastRow As Long
+    Dim pos As Long
+    
+    On Error GoTo ErrorHandler
+    prevYear = 0
+
+    ' Create objects for HTTP request and HTML document
+    Set http = CreateObject("MSXML2.XMLHTTP")
+    Set html = CreateObject("htmlfile")
+    
+    ' Set the date range
+    startDate = DateSerial(2021, 1, 4)
+    ' startDate = DateSerial(2024, 5, 2)
+    endDate = Date  ' DateSerial(2023, 9, 10)
+    ' endDate = DateSerial(2021, 6, 5)
+    
+    ' Add a new worksheet for exchange rates
+    ' Check if the sheet "ExchangeRates" exists
+    On Error Resume Next
+    Application.DisplayAlerts = False
+    Sheets("ExchangeRates").Delete
+    Application.DisplayAlerts = True
+    On Error GoTo 0
+
+' Add a new worksheet for exchange rates
+Sheets.Add(After:=ActiveSheet).Name = "ExchangeRates"
+    lastRow = 2
+    With Sheets("ExchangeRates")
+        .Cells(1, 1).Value = "Date"
+        .Cells(1, 2).Value = "Currency"
+        .Cells(1, 3).Value = "Counter"
+        .Cells(1, 4).Value = "Exchange Rate"
+    End With
+    
+    ' Loop through each date in the date range
+    For currentDate = startDate To endDate
+        ' Construct the URL for the current date
+        url = "https://index.minfin.com.ua/exchange/archive/nbu/" & Format(currentDate, "yyyy-mm-dd") & "/"
+        
+        ' Make the HTTP request
+        http.Open "GET", url, False
+        http.send
+        
+        ' Load the response HTML
+        html.body.innerHTML = http.responseText
+        
+        ' Initialize found flag to False
+        found = False
+        
+        ' Loop through each row in the table to find the desired currency
+        For Each tr In html.getElementsByTagName("tr")
+            currencyRow = tr.innerText
+                If InStr(currencyRow, "840USD") > 0 Then
+                ' Extract the exchange rate using string manipulation
+                    pos = InStr(currencyRow, "USD") + 3
+                    counter = Val(Mid(currencyRow, pos, 3))
+                    actualYear = Year(DateValue(currentDate))
+                    If actualYear < 2020 Then
+                        shifting = 20
+                        curLength = 8
+                        Else:
+                        shifting = 16
+                        curLength = 7
+                    End If
+                    pos = InStr(currencyRow, "840USD") + shifting
+                    exchangeRateStr = Mid(currencyRow, pos + 1, curLength)
+                    exchangeRate = CDbl(exchangeRateStr)
+                    found = True
+                    Exit For
+                End If
+        If actualYear <> prevYear Then
+            ActiveWorkbook.Save
+            prevYear = actualYear
+        End If
+        Next tr
+        DoEvents
+          If Err.Number <> 0 Then
+            Exit For
+        End If
+        
+        ' If the currency was found, write the data to the worksheet
+        If found Then
+            With Sheets("ExchangeRates")
+                .Cells(lastRow, 1).Value = currentDate
+                .Cells(lastRow, 2).Value = "USD"
+                .Cells(lastRow, 3).Value = counter
+                '.Cells(lastRow, 5).Value = currencyRow
+                .Cells(lastRow, 4).Value = exchangeRate / counter
+            End With
+            lastRow = lastRow + 1
+        End If
+    Next currentDate
+    
+    ' Clean up
+    Set http = Nothing
+    Set html = Nothing
+    
+    With Sheets("ExchangeRates").Range("D2:D" & lastRow)
+        .TextToColumns Destination:=.Cells(1, 1), DataType:=xlDelimited, TextQualifier:=xlDoubleQuote, ConsecutiveDelimiter:=False, Tab:=False, Semicolon:=False, Comma:=False, Space:=False, Other:=False
+    End With
+    
+ErrorHandler:
+    ' Обработчик прерывания
+    If Err.Number = 18 Then ' Код ошибки для прерывания Ctrl+Break
+        MsgBox "Выполнение прервано пользователем."
+        ' Дополнительные действия при прерывании (если необходимо)
+    Else
+        ' Обработка других ошибок
+        MsgBox "Произошла ошибка: " & Err.Description
+    End If
+
+    Exit Sub
+    
+End Sub
+
+
