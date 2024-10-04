@@ -19,9 +19,11 @@ def draw_koch_curve(order, size=300):
     t = turtle.Turtle()
     t.speed(0)  
     t.penup()
-    t.goto(-size / 2, 0)
+    t.goto(-size / 2, size / 3)
     t.pendown()
 
-    koch_curve(t, order, size)
+    for _ in range(3):
+        koch_curve(t, order, size)
+        t.right(120)
 
     window.mainloop()
